@@ -1,0 +1,105 @@
+{
+  "nodes": [
+    {
+      "id": "Webhook",
+      "type": "Webhook",
+      "parameters": {
+        "path": "waha",
+        "httpMethod": "POST"
+      }
+    },
+    {
+      "id": "EditFields",
+      "type": "Function",
+      "parameters": {
+        "functionCode": "return [{ body: $json.body, from: $json.from, to: $json.to, session: $json.session }];"
+      }
+    },
+    {
+      "id": "CheckFirstMessage",
+      "type": "If",
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json[\"isFirstMessage\"]}}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "SaveMessageNotion",
+      "type": "Notion",
+      "parameters": {
+        "operation": "createPage",
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "properties": {
+          "Usuário": { "title": [{ "text": { "content": "={{$json[\"from\"]}}" } }] },
+          "Sessão": { "rich_text": [{ "text": { "content": "={{$json[\"session\"]}}" } }] },
+          "Mensagem": { "rich_text": [{ "text": { "content": "={{$json[\"body\"]}}" } }] },
+          "Status": { "select": { "name": "Requisito" } }
+        }
+      }
+    },
+    {
+      "id": "GeneratePlan",
+      "type": "AI Agent",
+      "parameters": {
+        "model": "google-gemini",
+        "systemInstruction": "Você é um consultor de software. Gere um plano de desenvolvimento detalhado com etapas, tecnologias e entregáveis.",
+        "prompt": "O usuário enviou os seguintes requisitos: {{$json[\"body\"]}}"
+      }
+    },
+    {
+      "id": "SavePlanNotion",
+      "type": "Notion",
+      "parameters": {
+        "operation": "createPage",
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "properties": {
+          "Usuário": { "title": [{ "text": { "content": "={{$json[\"from\"]}}" } }] },
+          "Sessão": { "rich_text": [{ "text": { "content": "={{$json[\"session\"]}}" } }] },
+          "Plano": { "rich_text": [{ "text": { "content": "={{$json[\"text\"]}}" } }] },
+          "Status": { "select": { "name": "Plano" } }
+        }
+      }
+    },
+    {
+      "id": "WAHAStartTyping",
+      "type": "HTTP Request",
+      "parameters": {
+        "url": "https://waha-api/startTyping",
+        "method": "POST",
+        "body": { "to": "={{$json[\"from\"]}}" }
+      }
+    },
+    {
+      "id": "WAHAWait",
+      "type": "Wait",
+      "parameters": { "interval": 3 }
+    },
+    {
+      "id": "WAHASendMessage",
+      "type": "HTTP Request",
+      "parameters": {
+        "url": "https://waha-api/sendMessage",
+        "method": "POST",
+        "body": {
+          "to": "={{$json[\"from\"]}}",
+          "text": "={{$json[\"text\"]}}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": ["EditFields"],
+    "EditFields": ["CheckFirstMessage"],
+    "CheckFirstMessage": ["SaveMessageNotion"],
+    "SaveMessageNotion": ["GeneratePlan"],
+    "GeneratePlan": ["SavePlanNotion", "WAHAStartTyping"],
+    "WAHAStartTyping": ["WAHAWait"],
+    "WAHAWait": ["WAHASendMessage"]
+  }
+}
